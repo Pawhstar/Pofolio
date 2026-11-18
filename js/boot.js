@@ -45,15 +45,6 @@
     );
   }
 
-  function shuffle(arr) {
-    for (var i = arr.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
-      var tmp = arr[i];
-      arr[i] = arr[j];
-      arr[j] = tmp;
-    }
-    return arr;
-  }
 
   function finish() {
     if (finished) return;
@@ -136,12 +127,10 @@
       originX = btnRect.left + btnRect.width / 2;
       originY = btnRect.top + btnRect.height / 2;
     }
-    var wave = window.PixelFX
-      ? window.PixelFX.waveOrder(cols, rows, BLOCK_CSS_PX, originX, originY)
-      : null;
-    var order = wave ? wave.order : shuffle(Array.from({ length: total }, function (_, k) { return k; }));
+    var wave = window.PixelFX.waveOrder(cols, rows, BLOCK_CSS_PX, originX, originY);
+    var order = wave.order;
     function timeAt(k) {
-      return wave ? wave.times[k] : k / total;
+      return wave.times[k];
     }
 
     // Precompute exact device-pixel block bounds to avoid subpixel seams.

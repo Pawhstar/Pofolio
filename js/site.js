@@ -25,15 +25,6 @@
     );
   }
 
-  function shuffle(arr) {
-    for (var i = arr.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
-      var tmp = arr[i];
-      arr[i] = arr[j];
-      arr[j] = tmp;
-    }
-    return arr;
-  }
 
   function getTransitionFlag() {
     try {
@@ -112,7 +103,7 @@
   }
 
   /**
-   * Animate a shuffled block grid either covering the viewport ("cover")
+   * Animate a pixel wave either covering the viewport ("cover")
    * or dissolving a solid void overlay away ("reveal").
    */
   function runPixelTransition(mode, onDone, originX, originY) {
@@ -140,12 +131,10 @@
     // Wave expands from the given point (e.g. the clicked link), else screen center.
     var ox = typeof originX === "number" ? originX : surface.width / 2;
     var oy = typeof originY === "number" ? originY : surface.height / 2;
-    var wave = window.PixelFX
-      ? window.PixelFX.waveOrder(cols, rows, BLOCK_CSS_PX, ox, oy)
-      : null;
-    var order = wave ? wave.order : shuffle(Array.from({ length: total }, function (_, k) { return k; }));
+    var wave = window.PixelFX.waveOrder(cols, rows, BLOCK_CSS_PX, ox, oy);
+    var order = wave.order;
     function timeAt(k) {
-      return wave ? wave.times[k] : k / total;
+      return wave.times[k];
     }
 
     function drawBlock(blockIdx, fillColor) {
