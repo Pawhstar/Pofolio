@@ -1035,7 +1035,10 @@ a.is-kb-selected:not(.btn),
 
   .angry-popup.is-open {
     animation: none;
+  }
+}
 
+/* --------------------------------------------------------------------------
    14. Top Bar Keyboard Cursor (.nav .is-kb-selected)
    -------------------------------------------------------------------------- */
 
@@ -1058,4 +1061,49 @@ a.is-kb-selected:not(.btn),
     right: calc(100% + var(--px));
     font-size: calc(var(--px) * 1.75);
   }
+}
+
+/* --------------------------------------------------------------------------
+   Featured project card: status badge, content note, "coming soon" slot
+   -------------------------------------------------------------------------- */
+
+.card--featured .card__desc { max-width: 70ch; }
+
+.card__status {
+  align-self: flex-start;
+  margin: 0 0 calc(var(--px) * 3);
+  padding: var(--px) calc(var(--px) * 2);
+  background: var(--c-void);
+  border: calc(var(--px) / 2) solid var(--c-neon);
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--c-neon);
+  animation: status-blink 1.2s steps(2, start) infinite;
+}
+
+@keyframes status-blink {
+  50% { color: var(--c-leaf); border-color: var(--c-leaf); }
+}
+
+.card__note {
+  margin: calc(var(--px) * 3) 0 0;
+  font-size: 18px;
+  color: var(--c-leaf);
+}
+
+/* Not a link yet: looks like a disabled VIEW, selectable as a dead item (shakes on Enter). */
+.card__soon {
+  position: relative;
+  align-self: flex-start;
+  margin: calc(var(--px) * 4) 0 0;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--c-leaf);
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card__status { animation: none; }
 }

@@ -610,7 +610,7 @@
     var mainEl = document.querySelector("main");
     if (!navEl && !mainEl) return;
 
-    var DEAD_SELECTOR = ".skills > li:not(.skills__group), .skills--detail > li, .stats > div";
+    var DEAD_SELECTOR = ".skills > li:not(.skills__group), .skills--detail > li, .stats > div, .card__soon";
     var SELECTABLE_SELECTOR = "a[href], button, summary, " + DEAD_SELECTOR;
     var NAV_ITEM_SELECTOR = ".nav__back, .nav__links a";
     var DIR_TOL = 2;
