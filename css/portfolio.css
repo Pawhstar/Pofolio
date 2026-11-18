@@ -839,3 +839,201 @@ a.is-kb-selected:not(.btn),
     animation: none;
   }
 }
+
+/* --------------------------------------------------------------------------
+   14. Dead Selectable Rows, Pixel Shake & Angry Spam Popup
+   -------------------------------------------------------------------------- */
+
+.skills > li:not(.skills__group),
+.skills--detail > li,
+.stats > div {
+  position: relative;
+}
+
+.skills > li:not(.skills__group)[tabindex="-1"]:focus:not(.is-kb-selected),
+.skills--detail > li[tabindex="-1"]:focus:not(.is-kb-selected),
+.stats > div[tabindex="-1"]:focus:not(.is-kb-selected) {
+  outline: none;
+}
+
+.skills > li:not(.skills__group).is-kb-selected .skills__name,
+.skills--detail > li.is-kb-selected .skills__name,
+.stats > div.is-kb-selected dt {
+  color: var(--c-neon);
+}
+
+/* Keep the cursor inside the nested detail rail and centered on the last stat row. */
+.skills--detail > li.is-kb-selected::before {
+  right: calc(100% + (var(--px) * 2.5));
+  font-size: 10px;
+}
+
+.stats > div:last-child.is-kb-selected::before {
+  top: calc(50% + (var(--px) * 1.5));
+}
+
+@media (max-width: 560px) {
+  .skills > li:not(.skills__group).is-kb-selected::before,
+  .stats > div.is-kb-selected::before {
+    right: calc(100% + (var(--px) * 2.25));
+    font-size: 8px;
+  }
+
+  .skills--detail > li.is-kb-selected::before {
+    right: calc(100% + (var(--px) * 2));
+    font-size: 8px;
+  }
+}
+
+/* Dead-row activation shake + outline flash (--c-leaf -> --c-neon). */
+.is-shaking {
+  animation: dead-row-shake 0.3s steps(1, end);
+}
+
+@keyframes dead-row-shake {
+  0% {
+    transform: translateX(0);
+    outline-color: var(--c-leaf);
+  }
+  16% {
+    transform: translateX(calc(var(--px) * -1));
+    outline-color: var(--c-leaf);
+  }
+  36% {
+    transform: translateX(var(--px));
+    outline-color: var(--c-leaf);
+  }
+  56% {
+    transform: translateX(calc(var(--px) * -1));
+    outline-color: var(--c-neon);
+  }
+  76% {
+    transform: translateX(var(--px));
+    outline-color: var(--c-neon);
+  }
+  100% {
+    transform: translateX(0);
+    outline-color: var(--c-neon);
+  }
+}
+
+@keyframes dead-row-flash {
+  0% {
+    outline-color: var(--c-leaf);
+  }
+  55% {
+    outline-color: var(--c-neon);
+  }
+  100% {
+    outline-color: var(--c-neon);
+  }
+}
+
+/* Fixed pixel alert dialog shown when spamming dead items. */
+.angry-popup {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  margin: auto;
+  width: fit-content;
+  max-width: calc(100vw - (var(--px) * 8));
+  height: fit-content;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--px) * 3);
+  padding: calc(var(--px) * 7) calc(var(--px) * 8);
+  text-align: center;
+  background: var(--c-deep);
+  border-radius: 0;
+  box-shadow:
+    calc(var(--px) * -1) 0 0 0 var(--c-neon),
+    var(--px) 0 0 0 var(--c-neon),
+    0 calc(var(--px) * -1) 0 0 var(--c-neon),
+    0 var(--px) 0 0 var(--c-neon),
+    var(--px) var(--px) 0 0 var(--c-moss),
+    var(--px) calc(var(--px) * 2) 0 0 var(--c-moss),
+    calc(var(--px) * 2) var(--px) 0 0 var(--c-moss),
+    calc(var(--px) * 2) calc(var(--px) * 2) 0 0 var(--c-moss),
+    calc(var(--px) * 2) calc(var(--px) * 3) 0 0 var(--c-moss),
+    calc(var(--px) * 3) calc(var(--px) * 2) 0 0 var(--c-moss),
+    0 0 0 calc(var(--px) * 4) var(--c-void);
+}
+
+.angry-popup.is-open {
+  display: flex;
+  animation: angry-popup-in 0.28s steps(1, end);
+}
+
+.angry-popup[hidden] {
+  display: none;
+}
+
+.angry-popup__face {
+  display: block;
+  width: calc(var(--px) * 24);
+  height: calc(var(--px) * 24);
+  margin-bottom: var(--px);
+  image-rendering: pixelated;
+}
+
+.angry-popup__title {
+  margin: 0;
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: 0.06em;
+  color: var(--c-neon);
+  text-shadow: var(--px) var(--px) 0 var(--c-moss);
+}
+
+.angry-popup__sub {
+  margin: 0;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  line-height: 1.6;
+  letter-spacing: 0.06em;
+  color: var(--c-mint);
+}
+
+@keyframes angry-popup-in {
+  0% {
+    transform: scale(0.6);
+  }
+  30% {
+    transform: scale(1.1) translateX(calc(var(--px) * -1));
+  }
+  55% {
+    transform: scale(1.04) translateX(var(--px));
+  }
+  80% {
+    transform: scale(1) translateX(calc(var(--px) * -1));
+  }
+  100% {
+    transform: scale(1) translateX(0);
+  }
+}
+
+@media (max-width: 480px) {
+  .angry-popup {
+    padding: calc(var(--px) * 5) calc(var(--px) * 5);
+  }
+
+  .angry-popup__title {
+    font-size: 12px;
+  }
+
+  .angry-popup__sub {
+    font-size: 9px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-shaking {
+    animation: dead-row-flash 0.3s steps(1, end);
+  }
+
+  .angry-popup.is-open {
+    animation: none;
+  }
+}

@@ -455,8 +455,184 @@
     if (pageIndex === -1) return;
 
     var mainEl = document.querySelector("main");
-    var SELECTABLE_SELECTOR = "a[href], button, summary";
+    var INTERACTIVE_SELECTOR = "a[href], button, summary";
+    var DEAD_SELECTOR = ".skills > li:not(.skills__group), .skills--detail > li, .stats > div";
+    var SELECTABLE_SELECTOR = INTERACTIVE_SELECTOR + ", " + DEAD_SELECTOR;
+    var SPAM_WINDOW_MS = 1500;
+    var SPAM_THRESHOLD = 3;
+    var POPUP_AUTO_MS = 2500;
+
+    // 16x16 pixel angry face: # = void, N = neon, M = moss, L = leaf.
+    var ANGRY_FACE_GRID = [
+      "....########.L.L",
+      "..##NNNNNNNN##L.",
+      ".#NNNNNNNNNNNN#L",
+      ".#N##NNNNNN##N#.",
+      "#NNN##NNNN##NNN#",
+      "#NNNN##NN##NNNN#",
+      "#NNNNNNNNNNNNNN#",
+      "#NNN##NNNN##NNN#",
+      "#NNN##NNNN##NNN#",
+      "#NNNNNNNNNNNNNN#",
+      "#NNNN######NNNN#",
+      "#NNN##NNNN##NNN#",
+      ".#NN#NNNNNN#NN#.",
+      ".#MNNNNNNNNNNM#.",
+      "..##MMMMMMMM##..",
+      "....########...."
+    ];
+
+    var PIXEL_FILLS = {
+      "#": "var(--c-void)",
+      "N": "var(--c-neon)",
+      "M": "var(--c-moss)",
+      "L": "var(--c-leaf)"
+    };
+
     var selectedEl = null;
+    var deadPressTimes = [];
+    var popupEl = null;
+    var popupTimer = 0;
+    var isPopupOpen = false;
+
+    if (mainEl) {
+      var deadRows = mainEl.querySelectorAll(DEAD_SELECTOR);
+      for (var d = 0; d < deadRows.length; d++) {
+        deadRows[d].setAttribute("tabindex", "-1");
+      }
+    }
+
+    function isDeadItem(el) {
+      if (!el || el.nodeType !== 1) return false;
+      var tag = el.tagName;
+      if (tag === "A" && el.hasAttribute("href")) return false;
+      if (tag === "BUTTON" || tag === "SUMMARY") return false;
+      return typeof el.matches === "function" ? el.matches(DEAD_SELECTOR) : true;
+    }
+
+    function buildAngryFaceSvg() {
+      var ns = "http://www.w3.org/2000/svg";
+      var svg = document.createElementNS(ns, "svg");
+      svg.setAttribute("class", "angry-popup__face");
+      svg.setAttribute("viewBox", "0 0 16 16");
+      svg.setAttribute("width", "96");
+      svg.setAttribute("height", "96");
+      svg.setAttribute("shape-rendering", "crispEdges");
+      svg.setAttribute("aria-hidden", "true");
+
+      for (var y = 0; y < ANGRY_FACE_GRID.length; y++) {
+        var row = ANGRY_FACE_GRID[y];
+        for (var x = 0; x < row.length; x++) {
+          var fill = PIXEL_FILLS[row.charAt(x)];
+          if (!fill) continue;
+          var rect = document.createElementNS(ns, "rect");
+          rect.setAttribute("x", String(x));
+          rect.setAttribute("y", String(y));
+          rect.setAttribute("width", "1");
+          rect.setAttribute("height", "1");
+          rect.setAttribute("fill", fill);
+          svg.appendChild(rect);
+        }
+      }
+      return svg;
+    }
+
+    function onPopupKeydown(event) {
+      if (!isPopupOpen) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === "function") {
+        event.stopImmediatePropagation();
+      }
+      if (!event.repeat) {
+        hideAngryPopup();
+      }
+    }
+
+    function onPopupClick(event) {
+      if (!isPopupOpen) return;
+      event.preventDefault();
+      event.stopPropagation();
+      hideAngryPopup();
+    }
+
+    function hideAngryPopup() {
+      if (popupTimer) {
+        window.clearTimeout(popupTimer);
+        popupTimer = 0;
+      }
+      window.removeEventListener("keydown", onPopupKeydown, true);
+      window.removeEventListener("click", onPopupClick, true);
+      if (!isPopupOpen) return;
+      isPopupOpen = false;
+      if (popupEl) {
+        popupEl.classList.remove("is-open");
+        popupEl.hidden = true;
+      }
+    }
+
+    function getOrCreateAngryPopup() {
+      if (popupEl) return popupEl;
+
+      var box = document.createElement("div");
+      box.className = "angry-popup";
+      box.setAttribute("role", "alert");
+      box.hidden = true;
+
+      box.appendChild(buildAngryFaceSvg());
+
+      var title = document.createElement("p");
+      title.className = "angry-popup__title";
+      title.textContent = "NOTHING THERE!";
+      box.appendChild(title);
+
+      var sub = document.createElement("p");
+      sub.className = "angry-popup__sub";
+      sub.textContent = "STOP PRESSING ME >:(";
+      box.appendChild(sub);
+
+      body.appendChild(box);
+      popupEl = box;
+      return popupEl;
+    }
+
+    function showAngryPopup() {
+      if (isTransitioning) return;
+      var box = getOrCreateAngryPopup();
+      if (popupTimer) {
+        window.clearTimeout(popupTimer);
+      }
+      box.classList.remove("is-open");
+      box.hidden = false;
+      // Force reflow so the pop-in animation replays on reuse.
+      void box.offsetWidth;
+      box.classList.add("is-open");
+      isPopupOpen = true;
+      window.addEventListener("keydown", onPopupKeydown, true);
+      window.addEventListener("click", onPopupClick, true);
+      popupTimer = window.setTimeout(hideAngryPopup, POPUP_AUTO_MS);
+    }
+
+    function activateDeadItem(el) {
+      if (!el || isTransitioning) return;
+
+      el.classList.remove("is-shaking");
+      // Force reflow to restart keyframe if pressed again mid-animation.
+      void el.offsetWidth;
+      el.classList.add("is-shaking");
+
+      var now = Date.now();
+      var cutoff = now - SPAM_WINDOW_MS;
+      while (deadPressTimes.length && deadPressTimes[0] < cutoff) {
+        deadPressTimes.shift();
+      }
+      deadPressTimes.push(now);
+
+      if (deadPressTimes.length >= SPAM_THRESHOLD) {
+        deadPressTimes.length = 0;
+        showAngryPopup();
+      }
+    }
 
     function isEditable(el) {
       if (!el || el.nodeType !== 1) return false;
@@ -572,7 +748,25 @@
         }
         selectables = computeSelectables();
       }, true);
+
+      mainEl.addEventListener("animationend", function (event) {
+        var target = event.target;
+        if (
+          target &&
+          target.classList &&
+          target.classList.contains("is-shaking") &&
+          (event.animationName === "dead-row-shake" || event.animationName === "dead-row-flash")
+        ) {
+          target.classList.remove("is-shaking");
+        }
+      });
     }
+
+    window.addEventListener("pageshow", function (event) {
+      if (event && event.persisted) {
+        hideAngryPopup();
+      }
+    });
 
     function clickNavPage(offset) {
       var targetPage = INNER_PAGES[(pageIndex + offset + INNER_PAGES.length) % INNER_PAGES.length];
@@ -585,7 +779,7 @@
     }
 
     document.addEventListener("keydown", function (event) {
-      if (isTransitioning) return;
+      if (isTransitioning || isPopupOpen) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (isEditable(event.target) || isEditable(document.activeElement)) return;
 
@@ -621,13 +815,29 @@
         return;
       }
 
-      if ((key === " " || key === "Spacebar") && !event.repeat) {
+      if (key === "Enter" || key === " " || key === "Spacebar") {
         var active = document.activeElement;
-        if (active && active.tagName === "A" && active.hasAttribute("href")) {
+        var focusedInteractive =
+          active &&
+          active !== selectedEl &&
+          typeof active.matches === "function" &&
+          active.matches(INTERACTIVE_SELECTOR);
+
+        if (!focusedInteractive && selectedEl && isDeadItem(selectedEl) && isVisibleSelectable(selectedEl)) {
           event.preventDefault();
-          active.click();
+          if (!event.repeat) {
+            activateDeadItem(selectedEl);
+          }
+          return;
         }
-        return;
+
+        if ((key === " " || key === "Spacebar") && !event.repeat) {
+          if (active && active.tagName === "A" && active.hasAttribute("href")) {
+            event.preventDefault();
+            active.click();
+          }
+          return;
+        }
       }
 
       if ((key === "Escape" || key === "Backspace") && !event.repeat) {
