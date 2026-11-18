@@ -267,7 +267,10 @@
     if (url.protocol !== "file:" && url.origin !== window.location.origin) {
       return null;
     }
-    if (!/\.html$/i.test(url.pathname)) return null;
+    // Pages are linked without ".html" (GitHub Pages serves /about from about.html):
+    // allow "*.html", extensionless paths and "/"; reject other files (e.g. .pdf).
+    var lastSegment = url.pathname.split("/").pop();
+    if (lastSegment && !/\.html$/i.test(lastSegment) && lastSegment.indexOf(".") !== -1) return null;
 
     return url.href;
   }
