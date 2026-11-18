@@ -245,6 +245,7 @@
 
   function isTransitionableHtmlLink(link) {
     if (!link) return null;
+    if (link.getAttribute("aria-current") === "page") return null;
 
     var rawHref = (link.getAttribute("href") || "").trim();
     if (!rawHref || rawHref.charAt(0) === "#") return null;
@@ -436,7 +437,7 @@
 
   // --- Dead-item feedback: shake, and an angry popup when spammed ---
 
-  var SPAM_WINDOW_MS = 1500;
+  var SPAM_GAP_MS = 1000;
   var SPAM_THRESHOLD = 3;
   var POPUP_AUTO_MS = 2500;
 
@@ -461,7 +462,9 @@
   ];
   var PIXEL_FILLS = { "#": "var(--c-void)", "N": "var(--c-neon)", "M": "var(--c-moss)", "L": "var(--c-leaf)" };
 
-  var deadPressTimes = [];
+  var lastDeadEl = null;
+  var lastDeadAt = 0;
+  var deadStreak = 0;
   var popupEl = null;
   var popupTimer = 0;
   var isPopupOpen = false;
@@ -555,18 +558,26 @@
     popupTimer = window.setTimeout(hideAngryPopup, POPUP_AUTO_MS);
   }
 
-  // Called for Enter/Space on something with nothing to open (dead rows, current page tab).
+  // Called for Enter/Space or click on something with nothing to open (dead rows, current page tab).
   function onDeadActivate(el) {
-    if (!el || isTransitioning) return;
+    if (!el || isTransitioning || isPopupOpen) return;
     el.classList.remove("is-shaking");
     void el.offsetWidth; // restart the keyframe if pressed again mid-shake
     el.classList.add("is-shaking");
 
     var now = Date.now();
-    while (deadPressTimes.length && deadPressTimes[0] < now - SPAM_WINDOW_MS) deadPressTimes.shift();
-    deadPressTimes.push(now);
-    if (deadPressTimes.length >= SPAM_THRESHOLD) {
-      deadPressTimes.length = 0;
+    if (el === lastDeadEl && (now - lastDeadAt) < SPAM_GAP_MS) {
+      deadStreak += 1;
+    } else {
+      deadStreak = 1;
+      lastDeadEl = el;
+    }
+    lastDeadAt = now;
+
+    if (deadStreak >= SPAM_THRESHOLD) {
+      deadStreak = 0;
+      lastDeadEl = null;
+      lastDeadAt = 0;
       showAngryPopup();
     }
   }
@@ -580,7 +591,12 @@
   });
 
   window.addEventListener("pageshow", function (event) {
-    if (event && event.persisted) hideAngryPopup();
+    if (event && event.persisted) {
+      hideAngryPopup();
+      deadStreak = 0;
+      lastDeadEl = null;
+      lastDeadAt = 0;
+    }
   });
 
   function initInnerPageNav() {
@@ -836,7 +852,44 @@
     });
 
     document.addEventListener("click", function (event) {
-      var match = findSelectableTarget(event.target);
+      if (isTransitioning || isPopupOpen) return;
+
+      var target = event.target;
+      if (!target || typeof target.closest !== "function") return;
+
+      var isPrimary = event.button === 0 &&
+        !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+      var isPhysicalClick = isPrimary && event.detail > 0;
+
+      // Current page's own top-bar tab: prevent reload/transition, activate and select.
+      var curTab = target.closest('.nav__links a[aria-current="page"]');
+      if (curTab && isInNav(curTab)) {
+        event.preventDefault();
+        if (isPrimary) {
+          setSelected(curTab, false);
+          if (isPhysicalClick) {
+            onDeadActivate(curTab);
+          }
+        }
+        return;
+      }
+
+      // Dead rows: match via closest(), but NOT when the click lands on a real link/button/summary inside it.
+      var interactive = target.closest("a, button, summary");
+      if (!interactive) {
+        var deadRow = target.closest(DEAD_SELECTOR);
+        if (deadRow && isInMain(deadRow) && isVisibleSelectable(deadRow)) {
+          if (isPrimary) {
+            setSelected(deadRow, false);
+            if (isPhysicalClick) {
+              onDeadActivate(deadRow);
+            }
+          }
+          return;
+        }
+      }
+
+      var match = findSelectableTarget(target);
       if (match) {
         setSelected(match, false);
       }
