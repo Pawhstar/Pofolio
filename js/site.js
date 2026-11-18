@@ -2,9 +2,9 @@
   "use strict";
 
   var TRANSITION_KEY = "profolio:transition";
-  var TRANSITION_MS = 450;
-  var FLASH_MS = 45;
-  var BLOCK_CSS_PX = 28;
+  var TRANSITION_MS = 520;
+  var FLASH_MS = 40; // neon wavefront thickness, in ms
+  var BLOCK_CSS_PX = 20;
   var SKILL_STAGGER_MS = 120;
 
   var isTransitioning = false;
@@ -115,7 +115,7 @@
    * Animate a shuffled block grid either covering the viewport ("cover")
    * or dissolving a solid void overlay away ("reveal").
    */
-  function runPixelTransition(mode, onDone) {
+  function runPixelTransition(mode, onDone, originX, originY) {
     var isReveal = mode === "reveal";
     var surface = createTransitionCanvas(isReveal ? "none" : "auto");
     if (!surface) {
@@ -128,7 +128,6 @@
     var dpr = surface.dpr;
     var colorVoid = readToken("--c-void", "#020202");
     var colorNeon = readToken("--c-neon", "#16DB65");
-    var colorLeaf = readToken("--c-leaf", "#058C42");
 
     if (isReveal) {
       ctx.fillStyle = colorVoid;
@@ -138,11 +137,16 @@
     var cols = Math.max(1, Math.ceil(surface.width / BLOCK_CSS_PX));
     var rows = Math.max(1, Math.ceil(surface.height / BLOCK_CSS_PX));
     var total = cols * rows;
-    var order = new Array(total);
-    for (var i = 0; i < total; i++) {
-      order[i] = i;
+    // Wave expands from the given point (e.g. the clicked link), else screen center.
+    var ox = typeof originX === "number" ? originX : surface.width / 2;
+    var oy = typeof originY === "number" ? originY : surface.height / 2;
+    var wave = window.PixelFX
+      ? window.PixelFX.waveOrder(cols, rows, BLOCK_CSS_PX, ox, oy)
+      : null;
+    var order = wave ? wave.order : shuffle(Array.from({ length: total }, function (_, k) { return k; }));
+    function timeAt(k) {
+      return wave ? wave.times[k] : k / total;
     }
-    shuffle(order);
 
     function drawBlock(blockIdx, fillColor) {
       var col = blockIdx % cols;
@@ -192,17 +196,17 @@
       var elapsed = now - startTime;
 
       while (flashCursor < total) {
-        var flashAt = (flashCursor / total) * flashSpan;
+        var flashAt = timeAt(flashCursor) * flashSpan;
         if (elapsed < flashAt) break;
 
         if (elapsed < flashAt + FLASH_MS) {
-          drawBlock(order[flashCursor], flashCursor % 3 === 0 ? colorNeon : colorLeaf);
+          drawBlock(order[flashCursor], colorNeon);
         }
         flashCursor++;
       }
 
       while (settleCursor < total) {
-        var settleAt = (settleCursor / total) * flashSpan + FLASH_MS;
+        var settleAt = timeAt(settleCursor) * flashSpan + FLASH_MS;
         if (elapsed < settleAt) break;
 
         drawBlock(order[settleCursor], isReveal ? null : colorVoid);
@@ -279,10 +283,21 @@
       if (isTransitioning) return;
       isTransitioning = true;
 
+      // Keyboard-activated clicks report detail 0 and no pointer position: use the link's center.
+      var originX, originY;
+      if (event.detail > 0) {
+        originX = event.clientX;
+        originY = event.clientY;
+      } else {
+        var r = link.getBoundingClientRect();
+        originX = r.left + r.width / 2;
+        originY = r.top + r.height / 2;
+      }
+
       runPixelTransition("cover", function () {
         setTransitionFlag();
         window.location.href = dest;
-      });
+      }, originX, originY);
     });
 
     window.addEventListener("pageshow", function (event) {

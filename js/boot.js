@@ -2,9 +2,9 @@
   "use strict";
 
   var LOADING_MS = 600;
-  var FADE_MS = 1200;
-  var SPARKLE_MS = 60;
-  var BLOCK_CSS_PX = 28;
+  var FADE_MS = 1400;
+  var SPARKLE_MS = 80; // neon wavefront thickness, in ms
+  var BLOCK_CSS_PX = 20;
 
   var bootEl = document.getElementById("boot");
   var startBtn = document.getElementById("boot-start");
@@ -116,7 +116,6 @@
 
     var colorVoid = readToken("--c-void", "#020202");
     var colorNeon = readToken("--c-neon", "#16DB65");
-    var colorLeaf = readToken("--c-leaf", "#058C42");
 
     // Paint solid void before hiding #boot so the portfolio stays covered.
     ctx.fillStyle = colorVoid;
@@ -129,11 +128,21 @@
     var rows = Math.max(1, Math.ceil(height / BLOCK_CSS_PX));
     var total = cols * rows;
 
-    var order = new Array(total);
-    for (var i = 0; i < total; i++) {
-      order[i] = i;
+    // Wave origin: the START button, else screen center.
+    var originX = width / 2;
+    var originY = height / 2;
+    var btnRect = startBtn ? startBtn.getBoundingClientRect() : null;
+    if (btnRect && btnRect.width) {
+      originX = btnRect.left + btnRect.width / 2;
+      originY = btnRect.top + btnRect.height / 2;
     }
-    shuffle(order);
+    var wave = window.PixelFX
+      ? window.PixelFX.waveOrder(cols, rows, BLOCK_CSS_PX, originX, originY)
+      : null;
+    var order = wave ? wave.order : shuffle(Array.from({ length: total }, function (_, k) { return k; }));
+    function timeAt(k) {
+      return wave ? wave.times[k] : k / total;
+    }
 
     // Precompute exact device-pixel block bounds to avoid subpixel seams.
     function drawBlock(blockIdx, fillColor) {
@@ -164,18 +173,18 @@
       var elapsed = now - startTime;
 
       while (flashCursor < total) {
-        var flashAt = (flashCursor / total) * flashSpan;
+        var flashAt = timeAt(flashCursor) * flashSpan;
         if (elapsed < flashAt) break;
 
         var clearAtForFlash = flashAt + SPARKLE_MS;
         if (elapsed < clearAtForFlash) {
-          drawBlock(order[flashCursor], flashCursor % 3 === 0 ? colorNeon : colorLeaf);
+          drawBlock(order[flashCursor], colorNeon);
         }
         flashCursor++;
       }
 
       while (clearCursor < total) {
-        var clearAt = (clearCursor / total) * flashSpan + SPARKLE_MS;
+        var clearAt = timeAt(clearCursor) * flashSpan + SPARKLE_MS;
         if (elapsed < clearAt) break;
 
         drawBlock(order[clearCursor], null);
