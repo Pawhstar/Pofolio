@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Felliner — Portfolio</title>
+  <script>
+    // Hide the start screen before first paint if it already played this session.
+    try { if (sessionStorage.getItem("profolio:booted") === "1") document.documentElement.classList.add("skip-boot"); } catch (e) {}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/portfolio.css">
+  <link rel="stylesheet" href="css/boot.css">
+</head>
+<body class="is-booting page-menu">
+
+  <!-- ===== BOOT SCREEN (owned by boot.css / boot.js) ===== -->
+  <div id="boot" role="dialog" aria-label="Start screen">
+    <div class="boot__inner">
+      <p class="boot__title">FELLINER</p>
+      <p class="boot__subtitle">PORTFOLIO v1.0</p>
+      <button id="boot-start" class="boot__start" type="button">PRESS START</button>
+      <p class="boot__hint">[ ENTER ] / [ CLICK ]</p>
+    </div>
+  </div>
+  <canvas id="pixel-fade" aria-hidden="true"></canvas>
+
+  <!-- ===== MAIN MENU ===== -->
+  <main id="portfolio" class="menu">
+    <p class="menu__tag">PLAYER 1</p>
+    <h1 class="menu__name">FELLINER</h1>
+    <p class="menu__role">Developer &amp; Builder</p>
+
+    <nav class="menu__list" aria-label="Main menu">
+      <a class="menu__item" href="about.html">ABOUT</a>
+      <a class="menu__item" href="projects.html">PROJECTS</a>
+      <a class="menu__item" href="skills.html">SKILLS</a>
+      <a class="menu__item" href="contact.html">CONTACT</a>
+    </nav>
+
+    <p class="menu__hint">&uarr; &darr; SELECT &nbsp; [ ENTER ] CONFIRM</p>
+  </main>
+
+  <footer class="footer"><p>&copy; 2026 FELLINER</p></footer>
+
+  <script src="js/pixelfx.js" defer></script>
+  <script src="js/site.js" defer></script>
+  <script src="js/boot.js" defer></script>
+</body>
+</html>
