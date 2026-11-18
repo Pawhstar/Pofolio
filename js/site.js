@@ -8,7 +8,9 @@
   var SKILL_STAGGER_MS = 120;
 
   var isTransitioning = false;
-  var activeRafId = 0;
+  // Cancel functions for running transitions. Each run owns its own rAF id, so a
+  // finishing reveal can never cancel an in-flight cover (that froze the page).
+  var activeRuns = [];
 
   // --- Shared Helpers ---
 
@@ -57,10 +59,8 @@
   // --- Pixel Page Transitions ---
 
   function removeTransitionCanvases() {
-    if (activeRafId) {
-      window.cancelAnimationFrame(activeRafId);
-      activeRafId = 0;
-    }
+    activeRuns.slice().forEach(function (cancel) { cancel(); });
+    activeRuns = [];
     isTransitioning = false;
 
     var canvases = document.querySelectorAll("canvas.pixel-transition");
@@ -166,15 +166,24 @@
     var settleCursor = 0;
     var startTime = 0;
     var finished = false;
+    var rafId = 0;
+    // Safety net: if frames stall (e.g. background tab), complete anyway instead of freezing.
+    var watchdog = window.setTimeout(finish, TRANSITION_MS + FLASH_MS + 800);
+
+    function cancel() {
+      finished = true;
+      window.clearTimeout(watchdog);
+      window.removeEventListener("resize", handleResize);
+      if (rafId) window.cancelAnimationFrame(rafId);
+      rafId = 0;
+      var at = activeRuns.indexOf(cancel);
+      if (at !== -1) activeRuns.splice(at, 1);
+    }
+    activeRuns.push(cancel);
 
     function finish() {
       if (finished) return;
-      finished = true;
-      window.removeEventListener("resize", handleResize);
-      if (activeRafId) {
-        window.cancelAnimationFrame(activeRafId);
-        activeRafId = 0;
-      }
+      cancel();
       if (onDone) onDone(canvas);
     }
 
@@ -215,10 +224,10 @@
         return;
       }
 
-      activeRafId = window.requestAnimationFrame(tick);
+      rafId = window.requestAnimationFrame(tick);
     }
 
-    activeRafId = window.requestAnimationFrame(tick);
+    rafId = window.requestAnimationFrame(tick);
   }
 
   function initRevealTransition() {
