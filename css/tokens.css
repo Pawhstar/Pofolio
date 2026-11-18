@@ -1,0 +1,26 @@
+/* Palette — the only colors the site may use. */
+:root {
+  --c-void: #020202;   /* background */
+  --c-deep: #0D2818;   /* panels, cards */
+  --c-moss: #04471C;   /* borders, shadows */
+  --c-leaf: #058C42;   /* secondary accents, hover */
+  --c-neon: #16DB65;   /* primary text accent, highlights */
+  --c-mint: #C8F9DA;   /* added: readable body text on dark panels */
+
+  --font-pixel: "Press Start 2P", monospace;
+  --font-body: "VT323", monospace;
+
+  --px: 4px; /* base pixel unit — all spacing/borders are multiples */
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--c-void);
+  color: var(--c-neon);
+  font-family: var(--font-body);
+  font-size: 22px;
+  -webkit-font-smoothing: none;
+  image-rendering: pixelated;
+}

@@ -1,0 +1,180 @@
+/* Boot overlay & pixel-fade transition — uses only palette tokens from tokens.css */
+
+body.is-booting {
+  overflow: hidden;
+}
+
+#boot {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: grid;
+  place-items: center;
+  background: var(--c-void);
+  color: var(--c-neon);
+  padding: calc(var(--px) * 4);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Subtle CRT scanlines over the boot screen */
+#boot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 2px,
+    var(--c-deep) 2px,
+    var(--c-deep) 4px
+  );
+  opacity: 0.35;
+}
+
+.boot__inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: calc(var(--px) * 5);
+  max-width: 100%;
+}
+
+.boot__title {
+  margin: 0;
+  font-family: var(--font-pixel);
+  font-size: clamp(1.75rem, 6vw, 4rem);
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  color: var(--c-neon);
+  text-shadow:
+    var(--px) var(--px) 0 var(--c-leaf),
+    calc(var(--px) * 2) calc(var(--px) * 2) 0 var(--c-moss);
+}
+
+.boot__subtitle {
+  margin: 0;
+  font-family: var(--font-pixel);
+  font-size: clamp(0.75rem, 2vw, 1rem);
+  line-height: 1.5;
+  letter-spacing: 0.16em;
+  color: var(--c-leaf);
+}
+
+.boot__start {
+  margin-top: calc(var(--px) * 2);
+  padding: calc(var(--px) * 3) calc(var(--px) * 6);
+  font-family: var(--font-pixel);
+  font-size: clamp(0.875rem, 2.5vw, 1.125rem);
+  line-height: 1.4;
+  color: var(--c-neon);
+  background: var(--c-void);
+  border: var(--px) solid var(--c-neon);
+  box-shadow: var(--px) var(--px) 0 var(--c-moss);
+  cursor: pointer;
+  animation: boot-blink 1s steps(2, start) infinite;
+}
+
+.boot__start:hover,
+.boot__start:focus-visible {
+  animation: none;
+  background: var(--c-deep);
+  border-color: var(--c-leaf);
+  outline: var(--px) solid var(--c-neon);
+  outline-offset: var(--px);
+}
+
+#boot.is-loading {
+  cursor: progress;
+}
+
+#boot.is-loading .boot__start {
+  animation: none;
+  background: var(--c-void);
+  border-color: var(--c-leaf);
+  color: var(--c-leaf);
+  box-shadow: var(--px) var(--px) 0 var(--c-deep);
+  cursor: progress;
+}
+
+.boot__hint {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 1.15rem;
+  letter-spacing: 0.12em;
+  color: var(--c-leaf);
+}
+
+#boot.is-loading .boot__hint {
+  visibility: hidden;
+}
+
+/* Stepped retro loading bar inserted on start */
+.boot__progress {
+  width: min(260px, 72vw);
+  height: calc(var(--px) * 4);
+  padding: var(--px);
+  border: var(--px) solid var(--c-moss);
+  background: var(--c-deep);
+}
+
+.boot__progress-fill {
+  width: 0%;
+  height: 100%;
+  background: var(--c-neon);
+  animation: boot-load 0.55s steps(6, end) forwards;
+}
+
+/* Pixel-fade canvas sits above #boot when active */
+#pixel-fade {
+  display: none;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 950;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
+#pixel-fade.is-active {
+  display: block;
+}
+
+#portfolio[tabindex="-1"]:focus {
+  outline: none;
+}
+
+@keyframes boot-blink {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@keyframes boot-load {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot__start {
+    animation: none;
+  }
+}
+
+/* Start screen already played this session: never paint it. */
+.skip-boot #boot,
+.skip-boot #pixel-fade { display: none; }
+.skip-boot body.is-booting { overflow: auto; }
