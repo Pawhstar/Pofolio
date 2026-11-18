@@ -765,3 +765,77 @@ details[open] > summary.skills__row::before {
     min-width: 0;
   }
 }
+
+/* --------------------------------------------------------------------------
+   13. Inner-Page Keyboard Cursor & Hint (.is-kb-selected, .kb-hint)
+   -------------------------------------------------------------------------- */
+
+.is-kb-selected {
+  position: relative;
+  outline: var(--px) solid var(--c-neon);
+  outline-offset: var(--px);
+}
+
+.is-kb-selected:not(.skills__row)::before {
+  content: "▶";
+  position: absolute;
+  top: 50%;
+  right: calc(100% + var(--px) * 3);
+  transform: translateY(-50%);
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--c-neon);
+  pointer-events: none;
+  animation: cursor-blink 0.8s steps(1, end) infinite;
+}
+
+.btn.is-kb-selected::before {
+  right: calc(100% + var(--px) * 4);
+}
+
+a.is-kb-selected:not(.btn),
+.skills__row.is-kb-selected::before,
+.skills__row.is-kb-selected .skills__name {
+  color: var(--c-neon);
+}
+
+.card:has(.is-kb-selected) {
+  --dialog-border: var(--c-neon);
+  transform: translate(calc(var(--px) * -1), calc(var(--px) * -1));
+  box-shadow:
+    calc(var(--px) * -1) 0 0 0 var(--dialog-border),
+    var(--px) 0 0 0 var(--dialog-border),
+    0 calc(var(--px) * -1) 0 0 var(--dialog-border),
+    0 var(--px) 0 0 var(--dialog-border),
+    var(--px) var(--px) 0 0 var(--c-moss),
+    var(--px) calc(var(--px) * 2) 0 0 var(--c-moss),
+    calc(var(--px) * 2) var(--px) 0 0 var(--c-moss),
+    calc(var(--px) * 2) calc(var(--px) * 2) 0 0 var(--c-moss),
+    calc(var(--px) * 2) calc(var(--px) * 3) 0 0 var(--c-moss),
+    calc(var(--px) * 3) calc(var(--px) * 2) 0 0 var(--c-moss);
+}
+
+.kb-hint {
+  margin: calc(var(--px) * 4) auto 0;
+  padding-inline: calc(var(--px) * 4);
+  max-width: calc(var(--px) * 240);
+  text-align: center;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  line-height: 1.8;
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--c-leaf) 72%, transparent);
+}
+
+@media (hover: none) {
+  .kb-hint {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-kb-selected:not(.skills__row)::before {
+    animation: none;
+  }
+}

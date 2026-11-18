@@ -423,9 +423,218 @@
     }
   }
 
+  // --- Inner Page Game-Style Keyboard Navigation ---
+
+  function initInnerPageNav() {
+    var body = document.body;
+    if (!body || body.classList.contains("page-menu")) return;
+
+    var INNER_PAGES = [
+      { cls: "page-about", href: "about.html" },
+      { cls: "page-projects", href: "projects.html" },
+      { cls: "page-skills", href: "skills.html" },
+      { cls: "page-contact", href: "contact.html" }
+    ];
+
+    var pageIndex = -1;
+    for (var i = 0; i < INNER_PAGES.length; i++) {
+      if (body.classList.contains(INNER_PAGES[i].cls)) {
+        pageIndex = i;
+        break;
+      }
+    }
+    if (pageIndex === -1) return;
+
+    var mainEl = document.querySelector("main");
+    var SELECTABLE_SELECTOR = "a[href], button, summary";
+    var selectedEl = null;
+
+    function isEditable(el) {
+      if (!el || el.nodeType !== 1) return false;
+      if (el.isContentEditable) return true;
+      var tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+      return typeof el.closest === "function" &&
+        Boolean(el.closest('[contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]'));
+    }
+
+    function isInsideClosedDetails(el) {
+      var cur = el;
+      while (cur && cur !== body) {
+        var parent = cur.parentElement;
+        var details = parent && typeof parent.closest === "function" ? parent.closest("details") : null;
+        if (!details) break;
+        var isOwnSummary = cur.tagName === "SUMMARY" && parent === details;
+        if (!details.open && !isOwnSummary) return true;
+        cur = details;
+      }
+      return false;
+    }
+
+    function isVisibleSelectable(el) {
+      if (!el || el.disabled) return false;
+      if (isInsideClosedDetails(el)) return false;
+      var style = window.getComputedStyle(el);
+      if (style.display === "none" || style.visibility === "hidden") return false;
+      return el.getClientRects().length > 0;
+    }
+
+    function computeSelectables() {
+      if (!mainEl) return [];
+      var nodes = mainEl.querySelectorAll(SELECTABLE_SELECTOR);
+      var list = [];
+      for (var j = 0; j < nodes.length; j++) {
+        if (isVisibleSelectable(nodes[j])) {
+          list.push(nodes[j]);
+        }
+      }
+      return list;
+    }
+
+    var selectables = computeSelectables();
+
+    function setSelected(el, shouldFocus) {
+      if (selectedEl && selectedEl !== el) {
+        selectedEl.classList.remove("is-kb-selected");
+      }
+      selectedEl = el || null;
+      if (!selectedEl) return;
+
+      selectedEl.classList.add("is-kb-selected");
+      if (shouldFocus) {
+        selectedEl.focus({ preventScroll: true });
+        selectedEl.scrollIntoView({
+          block: "nearest",
+          behavior: prefersReducedMotion() ? "auto" : "smooth"
+        });
+      }
+    }
+
+    function moveSelection(delta) {
+      selectables = computeSelectables();
+      if (!selectables.length) return false;
+
+      var idx = selectedEl ? selectables.indexOf(selectedEl) : -1;
+      var nextIdx;
+      if (idx === -1) {
+        nextIdx = delta > 0 ? 0 : selectables.length - 1;
+      } else {
+        nextIdx = (idx + delta + selectables.length) % selectables.length;
+      }
+
+      setSelected(selectables[nextIdx], true);
+      return true;
+    }
+
+    function findSelectableTarget(target) {
+      if (!mainEl || !target || typeof target.closest !== "function") return null;
+      var match = target.closest(SELECTABLE_SELECTOR);
+      if (!match || !mainEl.contains(match)) return null;
+      return isVisibleSelectable(match) ? match : null;
+    }
+
+    document.addEventListener("focusin", function (event) {
+      var match = findSelectableTarget(event.target);
+      if (match) {
+        setSelected(match, false);
+      } else if (selectedEl) {
+        setSelected(null, false);
+      }
+    });
+
+    if (mainEl) {
+      mainEl.addEventListener("click", function (event) {
+        var match = findSelectableTarget(event.target);
+        if (match) {
+          setSelected(match, false);
+        }
+      });
+
+      // <details> toggle events do not bubble, so listen in the capture phase.
+      mainEl.addEventListener("toggle", function (event) {
+        var details = event.target;
+        if (!details || details.tagName !== "DETAILS") return;
+
+        if (!details.open && selectedEl && details.contains(selectedEl)) {
+          var ownSummary = details.querySelector(":scope > summary");
+          if (ownSummary && selectedEl !== ownSummary) {
+            setSelected(ownSummary, false);
+          }
+        }
+        selectables = computeSelectables();
+      }, true);
+    }
+
+    function clickNavPage(offset) {
+      var targetPage = INNER_PAGES[(pageIndex + offset + INNER_PAGES.length) % INNER_PAGES.length];
+      var link = document.querySelector('.nav__links a[href="' + targetPage.href + '"]');
+      if (link) {
+        link.click();
+        return true;
+      }
+      return false;
+    }
+
+    document.addEventListener("keydown", function (event) {
+      if (isTransitioning) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (isEditable(event.target) || isEditable(document.activeElement)) return;
+
+      var key = event.key;
+
+      if (key === "ArrowLeft" || key === "a" || key === "A") {
+        if (event.repeat) return;
+        if (clickNavPage(-1)) {
+          event.preventDefault();
+        }
+        return;
+      }
+
+      if (key === "ArrowRight" || key === "d" || key === "D") {
+        if (event.repeat) return;
+        if (clickNavPage(1)) {
+          event.preventDefault();
+        }
+        return;
+      }
+
+      if (key === "ArrowUp" || key === "w" || key === "W") {
+        if (moveSelection(-1)) {
+          event.preventDefault();
+        }
+        return;
+      }
+
+      if (key === "ArrowDown" || key === "s" || key === "S") {
+        if (moveSelection(1)) {
+          event.preventDefault();
+        }
+        return;
+      }
+
+      if ((key === " " || key === "Spacebar") && !event.repeat) {
+        var active = document.activeElement;
+        if (active && active.tagName === "A" && active.hasAttribute("href")) {
+          event.preventDefault();
+          active.click();
+        }
+        return;
+      }
+
+      if ((key === "Escape" || key === "Backspace") && !event.repeat) {
+        var backLink = document.querySelector(".nav__back");
+        if (backLink) {
+          event.preventDefault();
+          backLink.click();
+        }
+      }
+    });
+  }
+
   // Run reveal immediately at script execution to minimize flash on page load.
   initRevealTransition();
   initLinkTransitions();
   initMainMenu();
+  initInnerPageNav();
   initSkillBars();
 })();
