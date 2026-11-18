@@ -434,29 +434,36 @@
 
   // --- Inner Page Game-Style Keyboard Navigation ---
 
+  function onDeadActivate(el) {
+    if (!el) return;
+    el.classList.add("is-shaking");
+    window.setTimeout(function () {
+      el.classList.remove("is-shaking");
+    }, 300);
+  }
+
   function initInnerPageNav() {
     var body = document.body;
     if (!body || body.classList.contains("page-menu")) return;
 
-    var INNER_PAGES = [
-      { cls: "page-about", href: "about.html" },
-      { cls: "page-projects", href: "projects.html" },
-      { cls: "page-skills", href: "skills.html" },
-      { cls: "page-contact", href: "contact.html" }
-    ];
+    var navEl = document.querySelector(".nav");
+    var mainEl = document.querySelector("main");
+    if (!navEl && !mainEl) return;
 
-    var pageIndex = -1;
-    for (var i = 0; i < INNER_PAGES.length; i++) {
-      if (body.classList.contains(INNER_PAGES[i].cls)) {
-        pageIndex = i;
-        break;
+    var DEAD_SELECTOR = ".skills > li:not(.skills__group), .skills--detail > li, .stats > div";
+    var SELECTABLE_SELECTOR = "a[href], button, summary, " + DEAD_SELECTOR;
+    var NAV_ITEM_SELECTOR = ".nav__back, .nav__links a";
+    var DIR_TOL = 2;
+
+    if (mainEl) {
+      var deadRows = mainEl.querySelectorAll(DEAD_SELECTOR);
+      for (var d = 0; d < deadRows.length; d++) {
+        deadRows[d].setAttribute("tabindex", "-1");
       }
     }
-    if (pageIndex === -1) return;
 
-    var mainEl = document.querySelector("main");
-    var SELECTABLE_SELECTOR = "a[href], button, summary";
     var selectedEl = null;
+    var lastMainEl = null;
 
     function isEditable(el) {
       if (!el || el.nodeType !== 1) return false;
@@ -488,27 +495,59 @@
       return el.getClientRects().length > 0;
     }
 
+    function isInNav(el) {
+      return Boolean(el && navEl && navEl.contains(el));
+    }
+
+    function isInMain(el) {
+      return Boolean(el && mainEl && mainEl.contains(el));
+    }
+
+    function isDeadItem(el) {
+      return Boolean(el && typeof el.matches === "function" && el.matches(DEAD_SELECTOR));
+    }
+
+    function isCurrentPageTab(el) {
+      return Boolean(isInNav(el) && el.getAttribute("aria-current") === "page");
+    }
+
     function computeSelectables() {
       if (!mainEl) return [];
       var nodes = mainEl.querySelectorAll(SELECTABLE_SELECTOR);
       var list = [];
-      for (var j = 0; j < nodes.length; j++) {
-        if (isVisibleSelectable(nodes[j])) {
-          list.push(nodes[j]);
+      for (var i = 0; i < nodes.length; i++) {
+        if (isVisibleSelectable(nodes[i])) {
+          list.push(nodes[i]);
         }
       }
       return list;
     }
 
-    var selectables = computeSelectables();
+    function getNavItems() {
+      if (!navEl) return [];
+      var list = [];
+      var back = navEl.querySelector(".nav__back");
+      if (back && isVisibleSelectable(back)) list.push(back);
+      var tabs = navEl.querySelectorAll(".nav__links a");
+      for (var i = 0; i < tabs.length; i++) {
+        if (isVisibleSelectable(tabs[i])) list.push(tabs[i]);
+      }
+      return list;
+    }
 
     function setSelected(el, shouldFocus) {
+      if (el && isInNav(el) && !isInNav(selectedEl)) {
+        lastMainEl = isInMain(selectedEl) ? selectedEl : null;
+      }
       if (selectedEl && selectedEl !== el) {
         selectedEl.classList.remove("is-kb-selected");
       }
       selectedEl = el || null;
       if (!selectedEl) return;
 
+      if (isInMain(selectedEl)) {
+        lastMainEl = selectedEl;
+      }
       selectedEl.classList.add("is-kb-selected");
       if (shouldFocus) {
         selectedEl.focus({ preventScroll: true });
@@ -519,27 +558,131 @@
       }
     }
 
-    function moveSelection(delta) {
-      selectables = computeSelectables();
-      if (!selectables.length) return false;
-
-      var idx = selectedEl ? selectables.indexOf(selectedEl) : -1;
-      var nextIdx;
-      if (idx === -1) {
-        nextIdx = delta > 0 ? 0 : selectables.length - 1;
-      } else {
-        nextIdx = (idx + delta + selectables.length) % selectables.length;
-      }
-
-      setSelected(selectables[nextIdx], true);
+    function enterTopBar() {
+      var navItems = getNavItems();
+      if (!navItems.length) return false;
+      var currentTab = navEl.querySelector('.nav__links a[aria-current="page"]');
+      var target = currentTab && navItems.indexOf(currentTab) !== -1 ? currentTab : navItems[0];
+      setSelected(target, true);
       return true;
     }
 
+    function leaveTopBar() {
+      var list = computeSelectables();
+      if (!list.length) return false;
+      var target = lastMainEl && list.indexOf(lastMainEl) !== -1 ? lastMainEl : list[0];
+      setSelected(target, true);
+      return true;
+    }
+
+    function rangeGap(aMin, aMax, bMin, bMax) {
+      if (bMin > aMax) return bMin - aMax;
+      if (aMin > bMax) return aMin - bMax;
+      return 0;
+    }
+
+    function findSpatialTarget(curEl, candidates, dir) {
+      var r0 = curEl.getBoundingClientRect();
+      var cx0 = (r0.left + r0.right) / 2;
+      var cy0 = (r0.top + r0.bottom) / 2;
+
+      var bestEl = null;
+      var bestScore = Infinity;
+      var bestTie = Infinity;
+
+      for (var i = 0; i < candidates.length; i++) {
+        var el = candidates[i];
+        if (el === curEl) continue;
+
+        var r = el.getBoundingClientRect();
+        var cx = (r.left + r.right) / 2;
+        var cy = (r.top + r.bottom) / 2;
+
+        var primaryDist;
+        var crossDist;
+        var tie;
+
+        if (dir === "right") {
+          if (cx <= cx0 + DIR_TOL || cx <= r0.right) continue;
+          primaryDist = Math.max(0, r.left - r0.right);
+          crossDist = rangeGap(r0.top, r0.bottom, r.top, r.bottom);
+          tie = Math.abs(cy - cy0);
+        } else if (dir === "left") {
+          if (cx >= cx0 - DIR_TOL || cx >= r0.left) continue;
+          primaryDist = Math.max(0, r0.left - r.right);
+          crossDist = rangeGap(r0.top, r0.bottom, r.top, r.bottom);
+          tie = Math.abs(cy - cy0);
+        } else if (dir === "down") {
+          if (cy <= cy0 + DIR_TOL || cy <= r0.bottom) continue;
+          primaryDist = Math.max(0, r.top - r0.bottom);
+          crossDist = rangeGap(r0.left, r0.right, r.left, r.right);
+          tie = Math.abs(cx - cx0);
+        } else {
+          if (cy >= cy0 - DIR_TOL || cy >= r0.top) continue;
+          primaryDist = Math.max(0, r0.top - r.bottom);
+          crossDist = rangeGap(r0.left, r0.right, r.left, r.right);
+          tie = Math.abs(cx - cx0);
+        }
+
+        var score = primaryDist + 2 * crossDist;
+        if (score < bestScore || (score === bestScore && tie < bestTie)) {
+          bestScore = score;
+          bestTie = tie;
+          bestEl = el;
+        }
+      }
+
+      return bestEl;
+    }
+
+    function moveInDirection(dir) {
+      var navItems = getNavItems();
+      var navIdx = selectedEl ? navItems.indexOf(selectedEl) : -1;
+
+      if (navIdx !== -1) {
+        if (dir === "left" && navIdx > 0) {
+          setSelected(navItems[navIdx - 1], true);
+        } else if (dir === "right" && navIdx < navItems.length - 1) {
+          setSelected(navItems[navIdx + 1], true);
+        } else if (dir === "down") {
+          leaveTopBar();
+        }
+        return;
+      }
+
+      var list = computeSelectables();
+      if (!selectedEl || list.indexOf(selectedEl) === -1) {
+        if (dir === "up") {
+          enterTopBar();
+        } else if (list.length) {
+          setSelected(list[0], true);
+        }
+        return;
+      }
+
+      var next = findSpatialTarget(selectedEl, list, dir);
+      if (next) {
+        setSelected(next, true);
+      } else if (dir === "up") {
+        enterTopBar();
+      }
+    }
+
     function findSelectableTarget(target) {
-      if (!mainEl || !target || typeof target.closest !== "function") return null;
-      var match = target.closest(SELECTABLE_SELECTOR);
-      if (!match || !mainEl.contains(match)) return null;
-      return isVisibleSelectable(match) ? match : null;
+      if (!target || typeof target.closest !== "function") return null;
+      if (navEl) {
+        var navMatch = target.closest(NAV_ITEM_SELECTOR);
+        if (navMatch && navEl.contains(navMatch) && isVisibleSelectable(navMatch)) {
+          return navMatch;
+        }
+      }
+      if (mainEl) {
+        var mainMatch = target.closest(SELECTABLE_SELECTOR);
+        if (mainMatch && mainEl.contains(mainMatch) && isVisibleSelectable(mainMatch)) {
+          return mainMatch;
+        }
+      }
+      return null;
     }
 
     document.addEventListener("focusin", function (event) {
@@ -551,14 +694,14 @@
       }
     });
 
-    if (mainEl) {
-      mainEl.addEventListener("click", function (event) {
-        var match = findSelectableTarget(event.target);
-        if (match) {
-          setSelected(match, false);
-        }
-      });
+    document.addEventListener("click", function (event) {
+      var match = findSelectableTarget(event.target);
+      if (match) {
+        setSelected(match, false);
+      }
+    });
 
+    if (mainEl) {
       // <details> toggle events do not bubble, so listen in the capture phase.
       mainEl.addEventListener("toggle", function (event) {
         var details = event.target;
@@ -570,18 +713,12 @@
             setSelected(ownSummary, false);
           }
         }
-        selectables = computeSelectables();
       }, true);
     }
 
-    function clickNavPage(offset) {
-      var targetPage = INNER_PAGES[(pageIndex + offset + INNER_PAGES.length) % INNER_PAGES.length];
-      var link = document.querySelector('.nav__links a[href="' + targetPage.href + '"]');
-      if (link) {
-        link.click();
-        return true;
-      }
-      return false;
+    var initialActive = findSelectableTarget(document.activeElement);
+    if (initialActive) {
+      setSelected(initialActive, false);
     }
 
     document.addEventListener("keydown", function (event) {
@@ -590,43 +727,31 @@
       if (isEditable(event.target) || isEditable(document.activeElement)) return;
 
       var key = event.key;
+      var dir = null;
+      if (key === "ArrowUp" || key === "w" || key === "W") dir = "up";
+      else if (key === "ArrowDown" || key === "s" || key === "S") dir = "down";
+      else if (key === "ArrowLeft" || key === "a" || key === "A") dir = "left";
+      else if (key === "ArrowRight" || key === "d" || key === "D") dir = "right";
 
-      if (key === "ArrowLeft" || key === "a" || key === "A") {
-        if (event.repeat) return;
-        if (clickNavPage(-1)) {
-          event.preventDefault();
-        }
+      if (dir) {
+        event.preventDefault();
+        moveInDirection(dir);
         return;
       }
 
-      if (key === "ArrowRight" || key === "d" || key === "D") {
-        if (event.repeat) return;
-        if (clickNavPage(1)) {
+      if (key === "Enter" || key === " " || key === "Spacebar") {
+        if (!selectedEl) return;
+        if (event.repeat) {
           event.preventDefault();
+          return;
         }
-        return;
-      }
-
-      if (key === "ArrowUp" || key === "w" || key === "W") {
-        if (moveSelection(-1)) {
+        if (isDeadItem(selectedEl) || isCurrentPageTab(selectedEl)) {
           event.preventDefault();
+          onDeadActivate(selectedEl);
+          return;
         }
-        return;
-      }
-
-      if (key === "ArrowDown" || key === "s" || key === "S") {
-        if (moveSelection(1)) {
-          event.preventDefault();
-        }
-        return;
-      }
-
-      if ((key === " " || key === "Spacebar") && !event.repeat) {
-        var active = document.activeElement;
-        if (active && active.tagName === "A" && active.hasAttribute("href")) {
-          event.preventDefault();
-          active.click();
-        }
+        event.preventDefault();
+        selectedEl.click();
         return;
       }
 

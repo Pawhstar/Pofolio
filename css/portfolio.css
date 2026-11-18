@@ -839,3 +839,28 @@ a.is-kb-selected:not(.btn),
     animation: none;
   }
 }
+
+/* --------------------------------------------------------------------------
+   14. Top Bar Keyboard Cursor (.nav .is-kb-selected)
+   -------------------------------------------------------------------------- */
+
+.nav .is-kb-selected {
+  outline-width: calc(var(--px) / 2);
+  outline-offset: calc(var(--px) / 2);
+}
+
+.nav .is-kb-selected:not(.skills__row)::before {
+  right: calc(100% + var(--px) * 1.5);
+  font-size: calc(var(--px) * 2.25);
+}
+
+@media (max-width: 560px) {
+  .nav .is-kb-selected {
+    outline-offset: calc(var(--px) / 4);
+  }
+
+  .nav .is-kb-selected:not(.skills__row)::before {
+    right: calc(100% + var(--px));
+    font-size: calc(var(--px) * 1.75);
+  }
+}
