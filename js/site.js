@@ -26,17 +26,25 @@
   }
 
 
+  // The flag stores the wave origin as viewport fractions, so the next page's
+  // reveal starts from the same spot the cover started from.
   function getTransitionFlag() {
     try {
-      return window.sessionStorage.getItem(TRANSITION_KEY) === "1";
+      var raw = window.sessionStorage.getItem(TRANSITION_KEY);
+      if (!raw) return null;
+      var o = JSON.parse(raw);
+      var ok = o && typeof o.fx === "number" && typeof o.fy === "number";
+      return ok ? o : { fx: 0.5, fy: 0.5 };
     } catch (e) {
-      return false;
+      return null;
     }
   }
 
-  function setTransitionFlag() {
+  function setTransitionFlag(x, y) {
     try {
-      window.sessionStorage.setItem(TRANSITION_KEY, "1");
+      var fx = Math.min(1, Math.max(0, x / window.innerWidth));
+      var fy = Math.min(1, Math.max(0, y / window.innerHeight));
+      window.sessionStorage.setItem(TRANSITION_KEY, JSON.stringify({ fx: fx, fy: fy }));
     } catch (e) { /* storage unavailable: skip reveal on next page */ }
   }
 
@@ -214,16 +222,16 @@
   }
 
   function initRevealTransition() {
-    var shouldReveal = getTransitionFlag();
+    var origin = getTransitionFlag();
     clearTransitionFlag();
 
-    if (!shouldReveal || prefersReducedMotion()) return;
+    if (!origin || prefersReducedMotion()) return;
 
     runPixelTransition("reveal", function (canvas) {
       if (canvas && canvas.parentNode) {
         canvas.parentNode.removeChild(canvas);
       }
-    });
+    }, origin.fx * window.innerWidth, origin.fy * window.innerHeight);
   }
 
   function isTransitionableHtmlLink(link) {
@@ -284,7 +292,7 @@
       }
 
       runPixelTransition("cover", function () {
-        setTransitionFlag();
+        setTransitionFlag(originX, originY);
         window.location.href = dest;
       }, originX, originY);
     });
