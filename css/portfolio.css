@@ -646,3 +646,6 @@ body {
     transition: none;
   }
 }
+
+/* Stacked panels: leave room for the next panel's label tab. */
+.panel + .panel { margin-top: calc(var(--px) * 12); }
