@@ -434,66 +434,167 @@
 
   // --- Inner Page Game-Style Keyboard Navigation ---
 
+  // --- Dead-item feedback: shake, and an angry popup when spammed ---
+
+  var SPAM_WINDOW_MS = 1500;
+  var SPAM_THRESHOLD = 3;
+  var POPUP_AUTO_MS = 2500;
+
+  // 16x16 pixel angry face: # = void, N = neon, M = moss, L = leaf.
+  var ANGRY_FACE_GRID = [
+    "....########.L.L",
+    "..##NNNNNNNN##L.",
+    ".#NNNNNNNNNNNN#L",
+    ".#N##NNNNNN##N#.",
+    "#NNN##NNNN##NNN#",
+    "#NNNN##NN##NNNN#",
+    "#NNNNNNNNNNNNNN#",
+    "#NNN##NNNN##NNN#",
+    "#NNN##NNNN##NNN#",
+    "#NNNNNNNNNNNNNN#",
+    "#NNNN######NNNN#",
+    "#NNN##NNNN##NNN#",
+    ".#NN#NNNNNN#NN#.",
+    ".#MNNNNNNNNNNM#.",
+    "..##MMMMMMMM##..",
+    "....########...."
+  ];
+  var PIXEL_FILLS = { "#": "var(--c-void)", "N": "var(--c-neon)", "M": "var(--c-moss)", "L": "var(--c-leaf)" };
+
+  var deadPressTimes = [];
+  var popupEl = null;
+  var popupTimer = 0;
+  var isPopupOpen = false;
+
+  function buildAngryFaceSvg() {
+    var ns = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("class", "angry-popup__face");
+    svg.setAttribute("viewBox", "0 0 16 16");
+    svg.setAttribute("width", "96");
+    svg.setAttribute("height", "96");
+    svg.setAttribute("shape-rendering", "crispEdges");
+    svg.setAttribute("aria-hidden", "true");
+    for (var y = 0; y < ANGRY_FACE_GRID.length; y++) {
+      for (var x = 0; x < ANGRY_FACE_GRID[y].length; x++) {
+        var fill = PIXEL_FILLS[ANGRY_FACE_GRID[y].charAt(x)];
+        if (!fill) continue;
+        var rect = document.createElementNS(ns, "rect");
+        rect.setAttribute("x", String(x));
+        rect.setAttribute("y", String(y));
+        rect.setAttribute("width", "1");
+        rect.setAttribute("height", "1");
+        rect.setAttribute("fill", fill);
+        svg.appendChild(rect);
+      }
+    }
+    return svg;
+  }
+
+  // While the popup is open, the first key/click only dismisses it.
+  function onPopupKeydown(event) {
+    if (!isPopupOpen) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (!event.repeat) hideAngryPopup();
+  }
+
+  function onPopupClick(event) {
+    if (!isPopupOpen) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    hideAngryPopup();
+  }
+
+  function hideAngryPopup() {
+    if (popupTimer) {
+      window.clearTimeout(popupTimer);
+      popupTimer = 0;
+    }
+    window.removeEventListener("keydown", onPopupKeydown, true);
+    window.removeEventListener("click", onPopupClick, true);
+    if (!isPopupOpen) return;
+    isPopupOpen = false;
+    if (popupEl) {
+      popupEl.classList.remove("is-open");
+      popupEl.hidden = true;
+    }
+  }
+
+  function getOrCreateAngryPopup() {
+    if (popupEl) return popupEl;
+    var box = document.createElement("div");
+    box.className = "angry-popup";
+    box.setAttribute("role", "alert");
+    box.hidden = true;
+    box.appendChild(buildAngryFaceSvg());
+    var title = document.createElement("p");
+    title.className = "angry-popup__title";
+    title.textContent = "NOTHING THERE!";
+    box.appendChild(title);
+    var sub = document.createElement("p");
+    sub.className = "angry-popup__sub";
+    sub.textContent = "STOP PRESSING ME >:(";
+    box.appendChild(sub);
+    document.body.appendChild(box);
+    popupEl = box;
+    return popupEl;
+  }
+
+  function showAngryPopup() {
+    if (isTransitioning || !document.body) return;
+    var box = getOrCreateAngryPopup();
+    if (popupTimer) window.clearTimeout(popupTimer);
+    box.classList.remove("is-open");
+    box.hidden = false;
+    void box.offsetWidth; // reflow so the pop-in animation replays on reuse
+    box.classList.add("is-open");
+    isPopupOpen = true;
+    window.addEventListener("keydown", onPopupKeydown, true);
+    window.addEventListener("click", onPopupClick, true);
+    popupTimer = window.setTimeout(hideAngryPopup, POPUP_AUTO_MS);
+  }
+
+  // Called for Enter/Space on something with nothing to open (dead rows, current page tab).
+  function onDeadActivate(el) {
+    if (!el || isTransitioning) return;
+    el.classList.remove("is-shaking");
+    void el.offsetWidth; // restart the keyframe if pressed again mid-shake
+    el.classList.add("is-shaking");
+
+    var now = Date.now();
+    while (deadPressTimes.length && deadPressTimes[0] < now - SPAM_WINDOW_MS) deadPressTimes.shift();
+    deadPressTimes.push(now);
+    if (deadPressTimes.length >= SPAM_THRESHOLD) {
+      deadPressTimes.length = 0;
+      showAngryPopup();
+    }
+  }
+
+  document.addEventListener("animationend", function (event) {
+    var t = event.target;
+    if (t && t.classList && t.classList.contains("is-shaking") &&
+        (event.animationName === "dead-row-shake" || event.animationName === "dead-row-flash")) {
+      t.classList.remove("is-shaking");
+    }
+  });
+
+  window.addEventListener("pageshow", function (event) {
+    if (event && event.persisted) hideAngryPopup();
+  });
+
   function initInnerPageNav() {
     var body = document.body;
     if (!body || body.classList.contains("page-menu")) return;
 
-    var INNER_PAGES = [
-      { cls: "page-about", href: "about.html" },
-      { cls: "page-projects", href: "projects.html" },
-      { cls: "page-skills", href: "skills.html" },
-      { cls: "page-contact", href: "contact.html" }
-    ];
-
-    var pageIndex = -1;
-    for (var i = 0; i < INNER_PAGES.length; i++) {
-      if (body.classList.contains(INNER_PAGES[i].cls)) {
-        pageIndex = i;
-        break;
-      }
-    }
-    if (pageIndex === -1) return;
-
+    var navEl = document.querySelector(".nav");
     var mainEl = document.querySelector("main");
-    var INTERACTIVE_SELECTOR = "a[href], button, summary";
+    if (!navEl && !mainEl) return;
+
     var DEAD_SELECTOR = ".skills > li:not(.skills__group), .skills--detail > li, .stats > div";
-    var SELECTABLE_SELECTOR = INTERACTIVE_SELECTOR + ", " + DEAD_SELECTOR;
-    var SPAM_WINDOW_MS = 1500;
-    var SPAM_THRESHOLD = 3;
-    var POPUP_AUTO_MS = 2500;
-
-    // 16x16 pixel angry face: # = void, N = neon, M = moss, L = leaf.
-    var ANGRY_FACE_GRID = [
-      "....########.L.L",
-      "..##NNNNNNNN##L.",
-      ".#NNNNNNNNNNNN#L",
-      ".#N##NNNNNN##N#.",
-      "#NNN##NNNN##NNN#",
-      "#NNNN##NN##NNNN#",
-      "#NNNNNNNNNNNNNN#",
-      "#NNN##NNNN##NNN#",
-      "#NNN##NNNN##NNN#",
-      "#NNNNNNNNNNNNNN#",
-      "#NNNN######NNNN#",
-      "#NNN##NNNN##NNN#",
-      ".#NN#NNNNNN#NN#.",
-      ".#MNNNNNNNNNNM#.",
-      "..##MMMMMMMM##..",
-      "....########...."
-    ];
-
-    var PIXEL_FILLS = {
-      "#": "var(--c-void)",
-      "N": "var(--c-neon)",
-      "M": "var(--c-moss)",
-      "L": "var(--c-leaf)"
-    };
-
-    var selectedEl = null;
-    var deadPressTimes = [];
-    var popupEl = null;
-    var popupTimer = 0;
-    var isPopupOpen = false;
+    var SELECTABLE_SELECTOR = "a[href], button, summary, " + DEAD_SELECTOR;
+    var NAV_ITEM_SELECTOR = ".nav__back, .nav__links a";
+    var DIR_TOL = 2;
 
     if (mainEl) {
       var deadRows = mainEl.querySelectorAll(DEAD_SELECTOR);
@@ -502,137 +603,8 @@
       }
     }
 
-    function isDeadItem(el) {
-      if (!el || el.nodeType !== 1) return false;
-      var tag = el.tagName;
-      if (tag === "A" && el.hasAttribute("href")) return false;
-      if (tag === "BUTTON" || tag === "SUMMARY") return false;
-      return typeof el.matches === "function" ? el.matches(DEAD_SELECTOR) : true;
-    }
-
-    function buildAngryFaceSvg() {
-      var ns = "http://www.w3.org/2000/svg";
-      var svg = document.createElementNS(ns, "svg");
-      svg.setAttribute("class", "angry-popup__face");
-      svg.setAttribute("viewBox", "0 0 16 16");
-      svg.setAttribute("width", "96");
-      svg.setAttribute("height", "96");
-      svg.setAttribute("shape-rendering", "crispEdges");
-      svg.setAttribute("aria-hidden", "true");
-
-      for (var y = 0; y < ANGRY_FACE_GRID.length; y++) {
-        var row = ANGRY_FACE_GRID[y];
-        for (var x = 0; x < row.length; x++) {
-          var fill = PIXEL_FILLS[row.charAt(x)];
-          if (!fill) continue;
-          var rect = document.createElementNS(ns, "rect");
-          rect.setAttribute("x", String(x));
-          rect.setAttribute("y", String(y));
-          rect.setAttribute("width", "1");
-          rect.setAttribute("height", "1");
-          rect.setAttribute("fill", fill);
-          svg.appendChild(rect);
-        }
-      }
-      return svg;
-    }
-
-    function onPopupKeydown(event) {
-      if (!isPopupOpen) return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (typeof event.stopImmediatePropagation === "function") {
-        event.stopImmediatePropagation();
-      }
-      if (!event.repeat) {
-        hideAngryPopup();
-      }
-    }
-
-    function onPopupClick(event) {
-      if (!isPopupOpen) return;
-      event.preventDefault();
-      event.stopPropagation();
-      hideAngryPopup();
-    }
-
-    function hideAngryPopup() {
-      if (popupTimer) {
-        window.clearTimeout(popupTimer);
-        popupTimer = 0;
-      }
-      window.removeEventListener("keydown", onPopupKeydown, true);
-      window.removeEventListener("click", onPopupClick, true);
-      if (!isPopupOpen) return;
-      isPopupOpen = false;
-      if (popupEl) {
-        popupEl.classList.remove("is-open");
-        popupEl.hidden = true;
-      }
-    }
-
-    function getOrCreateAngryPopup() {
-      if (popupEl) return popupEl;
-
-      var box = document.createElement("div");
-      box.className = "angry-popup";
-      box.setAttribute("role", "alert");
-      box.hidden = true;
-
-      box.appendChild(buildAngryFaceSvg());
-
-      var title = document.createElement("p");
-      title.className = "angry-popup__title";
-      title.textContent = "NOTHING THERE!";
-      box.appendChild(title);
-
-      var sub = document.createElement("p");
-      sub.className = "angry-popup__sub";
-      sub.textContent = "STOP PRESSING ME >:(";
-      box.appendChild(sub);
-
-      body.appendChild(box);
-      popupEl = box;
-      return popupEl;
-    }
-
-    function showAngryPopup() {
-      if (isTransitioning) return;
-      var box = getOrCreateAngryPopup();
-      if (popupTimer) {
-        window.clearTimeout(popupTimer);
-      }
-      box.classList.remove("is-open");
-      box.hidden = false;
-      // Force reflow so the pop-in animation replays on reuse.
-      void box.offsetWidth;
-      box.classList.add("is-open");
-      isPopupOpen = true;
-      window.addEventListener("keydown", onPopupKeydown, true);
-      window.addEventListener("click", onPopupClick, true);
-      popupTimer = window.setTimeout(hideAngryPopup, POPUP_AUTO_MS);
-    }
-
-    function activateDeadItem(el) {
-      if (!el || isTransitioning) return;
-
-      el.classList.remove("is-shaking");
-      // Force reflow to restart keyframe if pressed again mid-animation.
-      void el.offsetWidth;
-      el.classList.add("is-shaking");
-
-      var now = Date.now();
-      var cutoff = now - SPAM_WINDOW_MS;
-      while (deadPressTimes.length && deadPressTimes[0] < cutoff) {
-        deadPressTimes.shift();
-      }
-      deadPressTimes.push(now);
-
-      if (deadPressTimes.length >= SPAM_THRESHOLD) {
-        deadPressTimes.length = 0;
-        showAngryPopup();
-      }
-    }
+    var selectedEl = null;
+    var lastMainEl = null;
 
     function isEditable(el) {
       if (!el || el.nodeType !== 1) return false;
@@ -664,27 +636,59 @@
       return el.getClientRects().length > 0;
     }
 
+    function isInNav(el) {
+      return Boolean(el && navEl && navEl.contains(el));
+    }
+
+    function isInMain(el) {
+      return Boolean(el && mainEl && mainEl.contains(el));
+    }
+
+    function isDeadItem(el) {
+      return Boolean(el && typeof el.matches === "function" && el.matches(DEAD_SELECTOR));
+    }
+
+    function isCurrentPageTab(el) {
+      return Boolean(isInNav(el) && el.getAttribute("aria-current") === "page");
+    }
+
     function computeSelectables() {
       if (!mainEl) return [];
       var nodes = mainEl.querySelectorAll(SELECTABLE_SELECTOR);
       var list = [];
-      for (var j = 0; j < nodes.length; j++) {
-        if (isVisibleSelectable(nodes[j])) {
-          list.push(nodes[j]);
+      for (var i = 0; i < nodes.length; i++) {
+        if (isVisibleSelectable(nodes[i])) {
+          list.push(nodes[i]);
         }
       }
       return list;
     }
 
-    var selectables = computeSelectables();
+    function getNavItems() {
+      if (!navEl) return [];
+      var list = [];
+      var back = navEl.querySelector(".nav__back");
+      if (back && isVisibleSelectable(back)) list.push(back);
+      var tabs = navEl.querySelectorAll(".nav__links a");
+      for (var i = 0; i < tabs.length; i++) {
+        if (isVisibleSelectable(tabs[i])) list.push(tabs[i]);
+      }
+      return list;
+    }
 
     function setSelected(el, shouldFocus) {
+      if (el && isInNav(el) && !isInNav(selectedEl)) {
+        lastMainEl = isInMain(selectedEl) ? selectedEl : null;
+      }
       if (selectedEl && selectedEl !== el) {
         selectedEl.classList.remove("is-kb-selected");
       }
       selectedEl = el || null;
       if (!selectedEl) return;
 
+      if (isInMain(selectedEl)) {
+        lastMainEl = selectedEl;
+      }
       selectedEl.classList.add("is-kb-selected");
       if (shouldFocus) {
         selectedEl.focus({ preventScroll: true });
@@ -695,27 +699,131 @@
       }
     }
 
-    function moveSelection(delta) {
-      selectables = computeSelectables();
-      if (!selectables.length) return false;
-
-      var idx = selectedEl ? selectables.indexOf(selectedEl) : -1;
-      var nextIdx;
-      if (idx === -1) {
-        nextIdx = delta > 0 ? 0 : selectables.length - 1;
-      } else {
-        nextIdx = (idx + delta + selectables.length) % selectables.length;
-      }
-
-      setSelected(selectables[nextIdx], true);
+    function enterTopBar() {
+      var navItems = getNavItems();
+      if (!navItems.length) return false;
+      var currentTab = navEl.querySelector('.nav__links a[aria-current="page"]');
+      var target = currentTab && navItems.indexOf(currentTab) !== -1 ? currentTab : navItems[0];
+      setSelected(target, true);
       return true;
     }
 
+    function leaveTopBar() {
+      var list = computeSelectables();
+      if (!list.length) return false;
+      var target = lastMainEl && list.indexOf(lastMainEl) !== -1 ? lastMainEl : list[0];
+      setSelected(target, true);
+      return true;
+    }
+
+    function rangeGap(aMin, aMax, bMin, bMax) {
+      if (bMin > aMax) return bMin - aMax;
+      if (aMin > bMax) return aMin - bMax;
+      return 0;
+    }
+
+    function findSpatialTarget(curEl, candidates, dir) {
+      var r0 = curEl.getBoundingClientRect();
+      var cx0 = (r0.left + r0.right) / 2;
+      var cy0 = (r0.top + r0.bottom) / 2;
+
+      var bestEl = null;
+      var bestScore = Infinity;
+      var bestTie = Infinity;
+
+      for (var i = 0; i < candidates.length; i++) {
+        var el = candidates[i];
+        if (el === curEl) continue;
+
+        var r = el.getBoundingClientRect();
+        var cx = (r.left + r.right) / 2;
+        var cy = (r.top + r.bottom) / 2;
+
+        var primaryDist;
+        var crossDist;
+        var tie;
+
+        if (dir === "right") {
+          if (cx <= cx0 + DIR_TOL || cx <= r0.right) continue;
+          primaryDist = Math.max(0, r.left - r0.right);
+          crossDist = rangeGap(r0.top, r0.bottom, r.top, r.bottom);
+          tie = Math.abs(cy - cy0);
+        } else if (dir === "left") {
+          if (cx >= cx0 - DIR_TOL || cx >= r0.left) continue;
+          primaryDist = Math.max(0, r0.left - r.right);
+          crossDist = rangeGap(r0.top, r0.bottom, r.top, r.bottom);
+          tie = Math.abs(cy - cy0);
+        } else if (dir === "down") {
+          if (cy <= cy0 + DIR_TOL || cy <= r0.bottom) continue;
+          primaryDist = Math.max(0, r.top - r0.bottom);
+          crossDist = rangeGap(r0.left, r0.right, r.left, r.right);
+          tie = Math.abs(cx - cx0);
+        } else {
+          if (cy >= cy0 - DIR_TOL || cy >= r0.top) continue;
+          primaryDist = Math.max(0, r0.top - r.bottom);
+          crossDist = rangeGap(r0.left, r0.right, r.left, r.right);
+          tie = Math.abs(cx - cx0);
+        }
+
+        var score = primaryDist + 2 * crossDist;
+        if (score < bestScore || (score === bestScore && tie < bestTie)) {
+          bestScore = score;
+          bestTie = tie;
+          bestEl = el;
+        }
+      }
+
+      return bestEl;
+    }
+
+    function moveInDirection(dir) {
+      var navItems = getNavItems();
+      var navIdx = selectedEl ? navItems.indexOf(selectedEl) : -1;
+
+      if (navIdx !== -1) {
+        if (dir === "left" && navIdx > 0) {
+          setSelected(navItems[navIdx - 1], true);
+        } else if (dir === "right" && navIdx < navItems.length - 1) {
+          setSelected(navItems[navIdx + 1], true);
+        } else if (dir === "down") {
+          leaveTopBar();
+        }
+        return;
+      }
+
+      var list = computeSelectables();
+      if (!selectedEl || list.indexOf(selectedEl) === -1) {
+        if (dir === "up") {
+          enterTopBar();
+        } else if (list.length) {
+          setSelected(list[0], true);
+        }
+        return;
+      }
+
+      var next = findSpatialTarget(selectedEl, list, dir);
+      if (next) {
+        setSelected(next, true);
+      } else if (dir === "up") {
+        enterTopBar();
+      }
+    }
+
     function findSelectableTarget(target) {
-      if (!mainEl || !target || typeof target.closest !== "function") return null;
-      var match = target.closest(SELECTABLE_SELECTOR);
-      if (!match || !mainEl.contains(match)) return null;
-      return isVisibleSelectable(match) ? match : null;
+      if (!target || typeof target.closest !== "function") return null;
+      if (navEl) {
+        var navMatch = target.closest(NAV_ITEM_SELECTOR);
+        if (navMatch && navEl.contains(navMatch) && isVisibleSelectable(navMatch)) {
+          return navMatch;
+        }
+      }
+      if (mainEl) {
+        var mainMatch = target.closest(SELECTABLE_SELECTOR);
+        if (mainMatch && mainEl.contains(mainMatch) && isVisibleSelectable(mainMatch)) {
+          return mainMatch;
+        }
+      }
+      return null;
     }
 
     document.addEventListener("focusin", function (event) {
@@ -727,14 +835,14 @@
       }
     });
 
-    if (mainEl) {
-      mainEl.addEventListener("click", function (event) {
-        var match = findSelectableTarget(event.target);
-        if (match) {
-          setSelected(match, false);
-        }
-      });
+    document.addEventListener("click", function (event) {
+      var match = findSelectableTarget(event.target);
+      if (match) {
+        setSelected(match, false);
+      }
+    });
 
+    if (mainEl) {
       // <details> toggle events do not bubble, so listen in the capture phase.
       mainEl.addEventListener("toggle", function (event) {
         var details = event.target;
@@ -746,36 +854,12 @@
             setSelected(ownSummary, false);
           }
         }
-        selectables = computeSelectables();
       }, true);
-
-      mainEl.addEventListener("animationend", function (event) {
-        var target = event.target;
-        if (
-          target &&
-          target.classList &&
-          target.classList.contains("is-shaking") &&
-          (event.animationName === "dead-row-shake" || event.animationName === "dead-row-flash")
-        ) {
-          target.classList.remove("is-shaking");
-        }
-      });
     }
 
-    window.addEventListener("pageshow", function (event) {
-      if (event && event.persisted) {
-        hideAngryPopup();
-      }
-    });
-
-    function clickNavPage(offset) {
-      var targetPage = INNER_PAGES[(pageIndex + offset + INNER_PAGES.length) % INNER_PAGES.length];
-      var link = document.querySelector('.nav__links a[href="' + targetPage.href + '"]');
-      if (link) {
-        link.click();
-        return true;
-      }
-      return false;
+    var initialActive = findSelectableTarget(document.activeElement);
+    if (initialActive) {
+      setSelected(initialActive, false);
     }
 
     document.addEventListener("keydown", function (event) {
@@ -784,60 +868,32 @@
       if (isEditable(event.target) || isEditable(document.activeElement)) return;
 
       var key = event.key;
+      var dir = null;
+      if (key === "ArrowUp" || key === "w" || key === "W") dir = "up";
+      else if (key === "ArrowDown" || key === "s" || key === "S") dir = "down";
+      else if (key === "ArrowLeft" || key === "a" || key === "A") dir = "left";
+      else if (key === "ArrowRight" || key === "d" || key === "D") dir = "right";
 
-      if (key === "ArrowLeft" || key === "a" || key === "A") {
-        if (event.repeat) return;
-        if (clickNavPage(-1)) {
-          event.preventDefault();
-        }
-        return;
-      }
-
-      if (key === "ArrowRight" || key === "d" || key === "D") {
-        if (event.repeat) return;
-        if (clickNavPage(1)) {
-          event.preventDefault();
-        }
-        return;
-      }
-
-      if (key === "ArrowUp" || key === "w" || key === "W") {
-        if (moveSelection(-1)) {
-          event.preventDefault();
-        }
-        return;
-      }
-
-      if (key === "ArrowDown" || key === "s" || key === "S") {
-        if (moveSelection(1)) {
-          event.preventDefault();
-        }
+      if (dir) {
+        event.preventDefault();
+        moveInDirection(dir);
         return;
       }
 
       if (key === "Enter" || key === " " || key === "Spacebar") {
-        var active = document.activeElement;
-        var focusedInteractive =
-          active &&
-          active !== selectedEl &&
-          typeof active.matches === "function" &&
-          active.matches(INTERACTIVE_SELECTOR);
-
-        if (!focusedInteractive && selectedEl && isDeadItem(selectedEl) && isVisibleSelectable(selectedEl)) {
+        if (!selectedEl) return;
+        if (event.repeat) {
           event.preventDefault();
-          if (!event.repeat) {
-            activateDeadItem(selectedEl);
-          }
           return;
         }
-
-        if ((key === " " || key === "Spacebar") && !event.repeat) {
-          if (active && active.tagName === "A" && active.hasAttribute("href")) {
-            event.preventDefault();
-            active.click();
-          }
+        if (isDeadItem(selectedEl) || isCurrentPageTab(selectedEl)) {
+          event.preventDefault();
+          onDeadActivate(selectedEl);
           return;
         }
+        event.preventDefault();
+        selectedEl.click();
+        return;
       }
 
       if ((key === "Escape" || key === "Backspace") && !event.repeat) {
